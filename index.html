@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Partner Dashboard - WA Blast</title>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .container { background-color: #1e293b; padding: 2rem; border-radius: 1rem; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+        h1 { font-size: 1.2rem; color: #38bdf8; margin-bottom: 1.5rem; }
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; background: #0f172a; padding: 15px; border-radius: 10px; }
+        .stat-item { text-align: center; }
+        .stat-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; }
+        .stat-value { font-size: 1.1rem; font-weight: bold; color: #22c55e; }
+        input { width: 100%; padding: 0.8rem; border-radius: 0.5rem; border: 1px solid #334155; background: #0f172a; color: white; margin-bottom: 1rem; box-sizing: border-box; }
+        button { width: 100%; padding: 0.8rem; border-radius: 0.5rem; border: none; background: #38bdf8; color: #0f172a; font-weight: bold; cursor: pointer; }
+        #loader { display: none; margin-top: 10px; color: #fbbf24; font-size: 0.8rem; }
+        #result { display: none; margin-top: 1.5rem; padding: 1rem; background: #0f172a; border-radius: 0.5rem; border: 1px dashed #38bdf8; }
+        .code { font-size: 1.8rem; font-weight: bold; letter-spacing: 4px; color: #22c55e; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dashboard Partner</h1>
+        
+        <div class="stat-grid">
+            <div class="stat-item">
+                <div class="stat-label">Pesan Sukses</div>
+                <div id="countSent" class="stat-value">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Pendapatan (750/psn)</div>
+                <div id="totalIncome" class="stat-value">Rp 0</div>
+            </div>
+        </div>
+
+        <input type="number" id="phone" placeholder="628123456789">
+        <button id="btn" onclick="requestPairing()">Dapatkan Kode Pairing</button>
+        <div id="loader">Menghubungkan ke server pusat...</div>
+
+        <div id="result">
+            <div style="font-size: 0.7rem; color: #94a3b8;">KODE PAIRING:</div>
+            <div class="code" id="codeDisplay">--------</div>
+        </div>
+    </div>
+
+    <script>
+        // Logika Ambil Kode
+        async function requestPairing() {
+            const phone = document.getElementById('phone').value;
+            if(!phone) return alert("Isi nomor WA!");
+            document.getElementById('btn').disabled = true;
+            document.getElementById('loader').style.display = 'block';
+            
+            try {
+                const res = await fetch('/get-code', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ number: phone })
+                });
+                const data = await res.json();
+                if(data.success) {
+                    document.getElementById('codeDisplay').innerText = data.code;
+                    document.getElementById('result').style.display = 'block';
+                } else { alert("Gagal: " + data.message); }
+            } catch (e) { alert("Server error"); }
+            document.getElementById('btn').disabled = false;
+            document.getElementById('loader').style.display = 'none';
+        }
+
+        // Logika Update Saldo Otomatis (Rp 750)
+        async function updateStats() {
+            try {
+                const res = await fetch('/get-stats', { method: 'POST' });
+                const data = await res.json();
+                if(data.success) {
+                    document.getElementById('countSent').innerText = data.total_pesan;
+                    document.getElementById('totalIncome').innerText = "Rp " + (data.total_pesan * 750).toLocaleString('id-ID');
+                }
+            } catch (e) { console.log("Stat update failed"); }
+        }
+        setInterval(updateStats, 30000); // Update tiap 30 detik
+        updateStats();
+    </script>
+</body>
+</html>
