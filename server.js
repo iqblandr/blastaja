@@ -9,10 +9,9 @@ app.use(express.static('.'));
 const EMAIL_A = process.env.EMAIL_A;
 const PASS_A = process.env.PASS_A;
 
-// Fungsi Helper Login
 async function loginAndGetPage() {
     const browser = await puppeteer.launch({
-        executablePath: '/usr/bin/chromium-browser', // Path VPS Ubuntu
+        executablePath: '/usr/bin/google-chrome', // Jalur Chrome VPS
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
         headless: "new"
     });
@@ -25,7 +24,6 @@ async function loginAndGetPage() {
     return { browser, page };
 }
 
-// Route 1: Ambil Kode Pairing
 app.post('/get-code', async (req, res) => {
     const { browser, page } = await loginAndGetPage();
     try {
@@ -37,7 +35,6 @@ app.post('/get-code', async (req, res) => {
         }
         await page.waitForSelector('input[placeholder*="62812"]');
         await page.type('input[placeholder*="62812"]', req.body.number);
-        
         const start = await page.$$('button');
         for (let b of start) {
             let t = await page.evaluate(el => el.innerText, b);
@@ -53,16 +50,13 @@ app.post('/get-code', async (req, res) => {
     finally { await browser.close(); }
 });
 
-// Route 2: Ambil Statistik Pesan untuk Logika Rp 750
 app.post('/get-stats', async (req, res) => {
     const { browser, page } = await loginAndGetPage();
     try {
         await page.goto('https://pinjemwa.com/user');
-        // Mencari angka "Pesan Sukses" di dashboard
         const totalPesan = await page.evaluate(() => {
             const items = Array.from(document.querySelectorAll('div'));
             const target = items.find(el => el.innerText.includes('Pesan Sukses'));
-            // Ambil angka dari elemen setelah teks 'Pesan Sukses'
             return target ? parseInt(target.innerText.replace(/\D/g, '')) : 0;
         });
         res.json({ success: true, total_pesan: totalPesan });
