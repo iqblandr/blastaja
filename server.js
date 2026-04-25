@@ -1,17 +1,52 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const puppeteer = require('puppeteer');
+const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcrypt');
+const session = require('express-session');
 const app = express();
+
+// Database Setup
+const db = new sqlite3.Database('./users.db');
+db.run("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT)");
 
 app.use(bodyParser.json());
 app.use(express.static('.'));
+app.use(session({
+    secret: 'andre-secret-key',
+    resave: false,
+    saveUninitialized: true
+}));
 
 const EMAIL_A = process.env.EMAIL_A;
 const PASS_A = process.env.PASS_A;
 
+// -- AUTH ROUTES --
+app.post('/register', async (req, res) => {
+    const { username, password } = req.body;
+    const hash = await bcrypt.hash(password, 10);
+    db.run("INSERT INTO users (username, password) VALUES (?, ?)", [username, hash], (err) => {
+        if(err) return res.json({success: false, message: 'Username sudah ada!'});
+        res.json({success: true});
+    });
+});
+
+app.post('/login', (req, res) => {
+    const { username, password } = req.body;
+    db.get("SELECT * FROM users WHERE username = ?", [username], async (err, user) => {
+        if(user && await bcrypt.compare(password, user.password)) {
+            req.session.userId = user.id;
+            res.json({success: true});
+        } else {
+            res.json({success: false, message: 'Login Gagal!'});
+        }
+    });
+});
+
+// -- PUPPETEER LOGIC (AKSES PINJEMWA) --
 async function loginAndGetPage() {
     const browser = await puppeteer.launch({
-        executablePath: '/usr/bin/google-chrome', // Jalur Chrome VPS
+        executablePath: '/usr/bin/google-chrome',
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
         headless: "new"
     });
@@ -25,6 +60,7 @@ async function loginAndGetPage() {
 }
 
 app.post('/get-code', async (req, res) => {
+    if(!req.session.userId) return res.json({success: false});
     const { browser, page } = await loginAndGetPage();
     try {
         await page.goto('https://pinjemwa.com/user/devices');
@@ -46,11 +82,12 @@ app.post('/get-code', async (req, res) => {
             return e ? e.innerText : null;
         });
         res.json({ success: !!code, code });
-    } catch (e) { res.json({ success: false, message: e.message }); }
+    } catch (e) { res.json({ success: false }); }
     finally { await browser.close(); }
 });
 
 app.post('/get-stats', async (req, res) => {
+    if(!req.session.userId) return res.json({success: false});
     const { browser, page } = await loginAndGetPage();
     try {
         await page.goto('https://pinjemwa.com/user');
@@ -62,6 +99,9 @@ app.post('/get-stats', async (req, res) => {
         res.json({ success: true, total_pesan: totalPesan });
     } catch (e) { res.json({ success: false }); }
     finally { await browser.close(); }
+});
+
+app.listen(process.env.PORT || 80, () => console.log('Server Live di Port 80'));
 });
 
 app.listen(process.env.PORT || 3000);
